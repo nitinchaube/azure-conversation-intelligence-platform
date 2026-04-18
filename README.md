@@ -1,140 +1,237 @@
-# Azure Conversation Intelligence Platform
+# Conversation Intelligence Platform
 
-An end-to-end conversation analytics platform built on Azure that ingests customer service call transcripts, extracts structured insights using Azure OpenAI, monitors agent compliance with enterprise policies, and provides a human-in-the-loop QA review workflow — all deployed via Infrastructure as Code.
+End-to-end contact-centre analytics system built on Azure. Ingests customer service call transcripts, extracts structured operational insights using Azure OpenAI, monitors agent compliance against configurable policy rules, and provides a human-in-the-loop QA review workflow for continuous AI quality improvement.
 
-Built by extending [Microsoft's Conversation Knowledge Mining Solution Accelerator](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator) with custom enterprise features.
+Built by extending [Microsoft's Conversation Knowledge Mining Solution Accelerator](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator) with custom enterprise features including automated compliance auditing, structured conversation analysis, agent performance scoring, and an operations analytics dashboard.
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Azure Resources (deployed via Bicep / azd)                              │
-│                                                                          │
-│  Azure OpenAI ──► Azure AI Search ──► Azure Content Understanding        │
-│  (GPT-4o-mini)    (Vector Index)       (Document Intelligence)           │
-│       │                │                        │                        │
-│       ▼                ▼                        ▼                        │
-│  ┌─────────────────────────────────────────────────────────────────┐     │
-│  │  Processing Pipeline                                            │     │
-│  │  01 Ingest & Transcribe  →  02 Summarize & Extract              │     │
-│  │  03 Sentiment & Scoring  →  04 Compliance Check ★               │     │
-│  │  05 Feedback Analytics ★                                        │     │
-│  └─────────────────────────────────────────────────────────────────┘     │
-│       │                                                                  │
-│       ▼                                                                  │
-│  Azure SQL / Cosmos DB ──► Web App (Container Apps) ──► Power BI         │
-│                                                                          │
-│  ★ = Custom extensions                                                   │
-└──────────────────────────────────────────────────────────────────────────┘
+Call Transcripts
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Azure AI Search                                                     │
+│  (Vector index over call transcripts, semantic search)               │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+┌─────────────┐  ┌─────────────────┐  ┌──────────────────┐
+│ Azure OpenAI │  │ Content          │  │ Azure Cosmos DB   │
+│ GPT-4o-mini  │  │ Understanding    │  │ Chat history      │
+│ Embeddings   │  │ Doc extraction   │  │ App state         │
+└──────┬──────┘  └────────┬────────┘  └──────────────────┘
+       │                  │
+       ▼                  ▼
+┌──────────────────────────────────────────┐
+│  Analysis Pipeline (custom)               │
+│                                           │
+│  Structured extraction:                   │
+│    sentiment, topic, intent, resolution,  │
+│    agent ID, handle time, customer effort │
+│                                           │
+│  Compliance checking:                     │
+│    6 rules x severity weighting           │
+│    PII, greeting, escalation, resolution, │
+│    empathy, upsell detection              │
+└──────────────────┬───────────────────────┘
+                   │
+         ┌─────────┼─────────┐
+         ▼         ▼         ▼
+┌──────────┐ ┌──────────┐ ┌───────────────────────────┐
+│ Azure SQL │ │ Storage   │ │ Operations Dashboard      │
+│ Structured│ │ Account   │ │ (Streamlit)               │
+│ metrics   │ │           │ │  - KPIs & analytics       │
+└──────────┘ └──────────┘ │  - Agent performance       │
+                           │  - Compliance monitor      │
+┌──────────────────────┐   │  - QA review interface     │
+│ Web App (App Service) │   │  - AI accuracy tracking   │
+│ RAG chatbot + dashboard│  │  - Conversation explorer  │
+└──────────────────────┘   └───────────────────────────┘
 ```
 
-## Custom Extensions
+## What I Built
 
-These are the features I built on top of the Microsoft accelerator:
+The base accelerator provides transcript ingestion, search indexing, and a RAG chatbot. Everything below is my addition.
 
-### 1. Automated Compliance Monitoring (`custom_extensions/04_compliance_check.py`)
+### Automated Compliance Monitoring
 
-An AI-powered compliance auditing pipeline that evaluates every call transcript against configurable policy rules:
+`custom_extensions/04_compliance_check.py`
 
-- **6 compliance rules** covering PII disclosure, professional greeting, escalation handling, resolution confirmation, empathy, and inappropriate upselling
-- **Structured analysis extraction** — sentiment, topic classification, customer intent, resolution status, handle time estimates, and customer effort scores
-- **Severity-based scoring** (critical / major / minor) with per-call and aggregate compliance scores
-- Results persisted to SQLite for downstream dashboards
+Pipeline that evaluates every call transcript against enterprise compliance rules using Azure OpenAI:
 
-### 2. Human Feedback / QA Review App (`custom_extensions/feedback_app.py`)
+- **Structured conversation analysis** — extracts sentiment, primary/sub topic, customer intent, resolution status, agent name, hold detection, transfer detection, estimated handle time, and customer effort score (1-5) from each transcript
+- **6 configurable compliance rules** with severity levels (critical/major/minor): PII disclosure, professional greeting, escalation offer, resolution confirmation, empathy demonstration, inappropriate upsell detection
+- **Inverted logic handling** — rules like PII disclosure where "YES" means a violation are scored correctly
+- Retry logic with exponential backoff for Azure OpenAI rate limits
+- Results persisted to SQLite with separate tables for analysis, per-rule results, and per-conversation summary scores
 
-A Streamlit-based interface where QA reviewers can rate AI-generated outputs:
+### Operations Dashboard
 
-- Side-by-side view of original transcript vs. AI analysis
-- Reviewers rate accuracy across 6 dimensions (summary, sentiment, topic, resolution, compliance, agent tone)
-- Supports sentiment correction and manual issue categorization
-- Tracks reviewer identity and prevents duplicate reviews
+`custom_extensions/app.py`
 
-### 3. Operations Analytics Dashboard (`custom_extensions/05_feedback_analytics.py`)
+Single-page Streamlit application with six modules:
 
-An interactive Streamlit dashboard aggregating all pipeline outputs:
+**Operations Dashboard** — Resolution rate, average handle time, customer effort score, hold rate, compliance score. Topic distribution, sentiment breakdown, customer intent analysis. Actionable table of unresolved/escalated calls requiring follow-up.
 
-- KPI cards: total calls, resolution rate, avg customer effort, avg handle time
-- Call topic distribution, sentiment breakdown, customer intent analysis
-- Compliance scorecard with per-rule pass rates and violation drilldowns
-- Agent performance leaderboard
-- AI accuracy metrics from human QA feedback
+**Agent Performance** — Per-agent scorecard: call volume, resolution rate, average customer effort, handle time, hold frequency, transfer count, compliance score, critical/major violations. Automated coaching signals that flag agents needing training or immediate review based on threshold analysis.
+
+**Compliance Monitor** — Aggregate compliance score, critical/major violation counts, clean call ratio. Per-rule pass rate chart, severity pivot table, searchable violation log with detail text. Compliance score distribution histogram.
+
+**QA Review** — Side-by-side transcript and AI analysis display with inline compliance results. 6-dimension rating form (summary, sentiment, topic, resolution, compliance, agent tone). Sentiment correction and manual issue re-categorization. Reviewer tracking with duplicate prevention.
+
+**AI Accuracy** — Accuracy metrics per dimension from QA reviews. Sentiment correction analysis showing where the model systematically errs. Low-confidence output flagging for retraining prioritization. Reviewer-assigned category distribution for comparison against AI classifications.
+
+**Conversation Explorer** — Filterable table by topic, sentiment, and resolution status. Drill-down into any conversation showing full AI analysis, compliance results, and original transcript.
+
+### Infrastructure Modifications
+
+Patched the accelerator's Bicep templates to work with new Pay-As-You-Go Azure subscriptions:
+
+- Changed SQL Server from Entra-ID-only auth to hybrid auth (AAD admin preserved for managed identity connections, SQL login added as fallback) — new PAYG subscriptions block AAD-only provisioning
+- Changed SQL SKU from GP_S_Gen5 (serverless) to Basic tier — serverless SKU gated on new subscriptions
+- Changed App Service Plan from B3 to B1 in a secondary region — new subscriptions have zero App Service quota in most regions
+- Added parameterized `appServiceLocation` and `secondaryLocation` to support cross-region deployment when primary region has quota restrictions
 
 ## Tech Stack
 
-| Technology | Usage |
-|---|---|
-| **Azure OpenAI** (GPT-4o-mini) | Summarization, entity extraction, compliance evaluation, RAG |
-| **Azure AI Search** | Vector-based semantic search over call transcripts |
-| **Azure Content Understanding** | Document and entity extraction |
-| **Azure Cosmos DB** | Conversation history and application state |
-| **Azure SQL Database** | Structured operational data |
-| **Azure Container Apps** | Hosting the web application |
-| **Bicep / ARM Templates** | Infrastructure as Code — full deployment automated |
-| **Azure Developer CLI (azd)** | One-command deployment orchestration |
-| **Python** | All pipeline logic and custom extensions |
-| **Streamlit** | QA review app and analytics dashboard |
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| LLM | Azure OpenAI (GPT-4o-mini) | Summarization, entity extraction, compliance evaluation, RAG answers |
+| Search | Azure AI Search | Vector index over call transcripts, semantic retrieval |
+| Document Processing | Azure Content Understanding | Transcript parsing and entity extraction |
+| Application Data | Azure Cosmos DB | Chat history, conversation state |
+| Structured Data | Azure SQL Database (Basic) | Operational metrics, structured query support |
+| Object Storage | Azure Storage Account | Raw transcript files, processed outputs |
+| Web Application | Azure App Service (Linux) | Containerized RAG chatbot and analytics dashboard |
+| Analytics | Streamlit | Operations dashboard, QA review, compliance monitor |
+| Infrastructure | Bicep + Azure Developer CLI | Automated deployment of all Azure resources |
+| Language | Python | Pipeline logic, API backend, custom extensions |
 
 ## Getting Started
 
 ### Prerequisites
 
-- Azure subscription with Contributor + RBAC Admin roles
-- [Azure Developer CLI (azd)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
+- Azure subscription (Pay-As-You-Go or higher)
+- [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) >= 1.24.0
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 - Python 3.10+
-- Access to Azure OpenAI Service
+- Contributor + Role Based Access Control Administrator roles on the subscription
 
-### Deploy
+### Deploy Infrastructure
 
 ```bash
-# Clone the repo
-git clone https://github.com/your-username/azure-conversation-intelligence-platform.git
-cd azure-conversation-intelligence-platform
-
-# Authenticate
 azd auth login
 az login
 
-# Deploy all Azure resources
+azd env new my-deployment
+azd env set AZURE_LOCATION uksouth
+azd env set AZURE_ENV_SECONDARY_LOCATION uksouth
+azd env set AZURE_ENV_AI_SERVICE_LOCATION uksouth
+
 azd up
+```
+
+When prompted, select `uksouth` for location and `telecom` for use case.
+
+### Post-Deployment Setup
+
+```bash
+# Create AI agents
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+bash ./infra/scripts/run_create_agents_scripts.sh
+
+# Grant permissions and load sample data
+bash ./infra/scripts/process_sample_data.sh
+```
+
+### Grant RBAC for Custom Extensions
+
+```bash
+USER_ID=$(az ad signed-in-user show --query "id" -o tsv)
+RG="<your-resource-group>"
+
+# Cosmos DB data access
+az cosmosdb sql role assignment create \
+  --account-name <cosmos-account> \
+  --resource-group $RG \
+  --role-definition-id "00000000-0000-0000-0000-000000000002" \
+  --principal-id $USER_ID \
+  --scope "/"
+
+# Azure OpenAI access
+az role assignment create \
+  --assignee $USER_ID \
+  --role "Cognitive Services OpenAI User" \
+  --scope "/subscriptions/<sub-id>/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/<ai-account>"
+
+# AI Search read access
+az role assignment create \
+  --assignee $USER_ID \
+  --role "Search Index Data Reader" \
+  --scope "/subscriptions/<sub-id>/resourceGroups/$RG/providers/Microsoft.Search/searchServices/<search-account>"
 ```
 
 ### Run Custom Extensions
 
 ```bash
-# Install dependencies
 pip install -r custom_extensions/requirements.txt
 
-# Run compliance analysis pipeline
+# Run the analysis + compliance pipeline (processes 20 transcripts)
 python custom_extensions/04_compliance_check.py
 
-# Launch the QA review app
-streamlit run custom_extensions/feedback_app.py
+# Launch the operations dashboard
+streamlit run custom_extensions/app.py
+```
 
-# Launch the analytics dashboard
-streamlit run custom_extensions/05_feedback_analytics.py
+### Tear Down (stop all charges)
+
+```bash
+azd down --purge --force
 ```
 
 ## Project Structure
 
 ```
-├── infra/                    # Bicep IaC templates for Azure resources
+.
+├── infra/
+│   ├── main.bicep              # Primary IaC template (patched)
+│   ├── main.parameters.json    # Deployment parameters
+│   ├── modules/                # Bicep modules (web, AI, network)
+│   └── scripts/                # Post-deployment setup scripts
 ├── src/
-│   ├── api/                  # Backend API (Python)
-│   └── App/                  # Frontend web application
-├── custom_extensions/        # ★ My custom additions
-│   ├── 04_compliance_check.py
-│   ├── 05_feedback_analytics.py
-│   ├── feedback_app.py
+│   ├── api/                    # Backend API (Python, containerized)
+│   └── App/                    # Frontend React application
+├── custom_extensions/
+│   ├── app.py                  # Operations dashboard (6 modules)
+│   ├── 04_compliance_check.py  # Analysis + compliance pipeline
+│   ├── feedback_app.py         # Standalone QA review app
+│   ├── 05_feedback_analytics.py# Standalone analytics (superseded by app.py)
 │   └── requirements.txt
-├── call_transcripts/         # Sample call transcript data
-├── audio_data/               # Sample audio files
-├── tests/                    # Test suite
-├── azure.yaml                # Azure Developer CLI configuration
-└── docs/                     # Documentation and deployment guides
+├── documents/                  # Sample call transcript data
+├── tests/                      # Test suite
+├── azure.yaml                  # azd configuration
+└── README.md
 ```
+
+## Cost Estimate
+
+Running estimate with minimum SKUs:
+
+| Resource | Monthly Cost |
+|----------|-------------|
+| App Service (B1) | ~$13 |
+| Azure SQL (Basic) | ~$5 |
+| Cosmos DB (serverless) | ~$25 |
+| AI Search (Basic) | ~$25 |
+| Azure OpenAI (usage-based) | ~$5 |
+| Storage | ~$1 |
+| **Total** | **~$75/month** |
+
+Run `azd down --purge` when not actively using the deployment.
 
 ## License
 
-This project extends Microsoft's [Conversation Knowledge Mining Solution Accelerator](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator), which is provided under the MIT License. See [LICENSE](./LICENSE) for details.
+This project extends Microsoft's [Conversation Knowledge Mining Solution Accelerator](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator), provided under the MIT License. See [LICENSE](./LICENSE) for details.
