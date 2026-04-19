@@ -4,6 +4,8 @@ End-to-end contact-centre analytics system built on Azure. Ingests customer serv
 
 Built by extending [Microsoft's Conversation Knowledge Mining Solution Accelerator](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator) with custom enterprise features including automated compliance auditing, structured conversation analysis, agent performance scoring, and an operations analytics dashboard.
 
+![Operations Dashboard](screenshots/01-operations-dashboard.png)
+
 ## Architecture
 
 ```
@@ -85,6 +87,37 @@ Single-page Streamlit application with six modules:
 
 **Conversation Explorer** — Filterable table by topic, sentiment, and resolution status. Drill-down into any conversation showing full AI analysis, compliance results, and original transcript.
 
+#### Dashboard Screenshots
+
+| | |
+|---|---|
+| ![Agent Performance](screenshots/02-agent-performance.png) | ![Compliance Monitor](screenshots/03-compliance-monitor.png) |
+| *Agent Performance — per-agent scorecard with coaching signals* | *Compliance Monitor — per-rule pass rates and violation log* |
+| ![QA Review](screenshots/04-qa-review.png) | ![AI Accuracy](screenshots/07-ai-accuracy.png) |
+| *QA Review — side-by-side transcript vs AI analysis with 6-dimension rating* | *AI Accuracy — model correctness metrics from human review* |
+| ![Conversation Explorer](screenshots/05-conversation-explorer.png) | ![Deployed Web App](screenshots/06-ckm-web-app.png) |
+| *Conversation Explorer — filterable drill-down into every call* | *Deployed RAG chatbot on Azure App Service* |
+
+### Power BI Executive Dashboard
+
+A second analytics surface built directly on top of the Azure SQL database populated by the pipeline. Aimed at business stakeholders who want summary-level insight without opening the operations app.
+
+![Power BI Dashboard](screenshots/powerbi_dashboard.png)
+
+Connects Power BI Service to Azure SQL via a published semantic model, with visuals for:
+
+- Total conversations analysed (distinct count)
+- Sentiment distribution across all calls
+- Call volume by mined topic
+- Topic trends over time
+- Key phrase frequency table
+- Topic slicer for interactive filtering
+
+| | |
+|---|---|
+| ![Sentiment Distribution](screenshots/powerbi_sentiment.png) | ![Topic Distribution](screenshots/powerbi_topics.png) |
+| *Sentiment distribution across all conversations* | *Call volume by mined topic* |
+
 ### Infrastructure Modifications
 
 Patched the accelerator's Bicep templates to work with new Pay-As-You-Go Azure subscriptions:
@@ -93,6 +126,22 @@ Patched the accelerator's Bicep templates to work with new Pay-As-You-Go Azure s
 - Changed SQL SKU from GP_S_Gen5 (serverless) to Basic tier — serverless SKU gated on new subscriptions
 - Changed App Service Plan from B3 to B1 in a secondary region — new subscriptions have zero App Service quota in most regions
 - Added parameterized `appServiceLocation` and `secondaryLocation` to support cross-region deployment when primary region has quota restrictions
+
+![Deployed Azure Resources](screenshots/azure_portal.png)
+*Resource group view of all deployed infrastructure*
+
+## Architectural Decisions
+
+**Why native Azure services instead of Microsoft Fabric?**
+
+The base accelerator uses Azure SQL for structured metrics and Azure AI Search as the semantic retrieval layer — the same medallion-style pattern Fabric provides via OneLake and Lakehouse, but composed from discrete services. This was kept deliberately because:
+
+- Finer-grained cost control per service (Fabric capacities are billed continuously; native services scale to zero or near-zero)
+- Existing Azure estates don't need a new analytics platform alongside their current investments
+- Azure AI Search provides integrated vector search, which is required for the RAG chatbot and isn't native to Fabric Lakehouse
+- Power BI connects directly to the Azure SQL semantic model, giving the same BI experience as Fabric without the capacity requirement
+
+The pipeline could be ported to Fabric (Lakehouse + Data Engineering notebooks) by swapping the ingestion/storage layer; no AI or analytics logic would change.
 
 ## Tech Stack
 
@@ -207,10 +256,9 @@ azd down --purge --force
 ├── custom_extensions/
 │   ├── app.py                  # Operations dashboard (6 modules)
 │   ├── 04_compliance_check.py  # Analysis + compliance pipeline
-│   ├── feedback_app.py         # Standalone QA review app
-│   ├── 05_feedback_analytics.py# Standalone analytics (superseded by app.py)
 │   └── requirements.txt
 ├── documents/                  # Sample call transcript data
+├── screenshots/                # Dashboard and deployment screenshots
 ├── tests/                      # Test suite
 ├── azure.yaml                  # azd configuration
 └── README.md
