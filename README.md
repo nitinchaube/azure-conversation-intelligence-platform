@@ -4,7 +4,17 @@ End-to-end contact-centre analytics system built on Azure. Ingests customer serv
 
 Built by extending [Microsoft's Conversation Knowledge Mining Solution Accelerator](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator) with custom enterprise features including automated compliance auditing, structured conversation analysis, agent performance scoring, and an operations analytics dashboard.
 
+## Live Deployment
+
+The full accelerator stack deployed via `azd up` with patched Bicep — RAG chatbot grounded in 856 processed call transcripts, KPI dashboard, trending topics, and key-phrase extraction on the same Azure AI Search + Azure SQL backend consumed by the custom extensions.
+
+![Deployed RAG Web App](screenshots/06-ckm-web-app.png)
+*Deployed web app on Azure App Service — native accelerator UI with RAG chatbot answering "what are the top customer complaints?" grounded in indexed transcripts*
+
+## Custom Operations Dashboard
+
 ![Operations Dashboard](screenshots/01-operations-dashboard.png)
+*Custom Streamlit dashboard built on top of the accelerator's data layer*
 
 ## Architecture
 
@@ -95,8 +105,8 @@ Single-page Streamlit application with six modules:
 | *Agent Performance — per-agent scorecard with coaching signals* | *Compliance Monitor — per-rule pass rates and violation log* |
 | ![QA Review](screenshots/04-qa-review.png) | ![AI Accuracy](screenshots/07-ai-accuracy.png) |
 | *QA Review — side-by-side transcript vs AI analysis with 6-dimension rating* | *AI Accuracy — model correctness metrics from human review* |
-| ![Conversation Explorer](screenshots/05-conversation-explorer.png) | ![Deployed Web App](screenshots/06-ckm-web-app.png) |
-| *Conversation Explorer — filterable drill-down into every call* | *Deployed RAG chatbot on Azure App Service* |
+| ![Conversation Explorer](screenshots/05-conversation-explorer.png) | |
+| *Conversation Explorer — filterable drill-down into every call* | |
 
 ### Power BI Executive Dashboard
 
