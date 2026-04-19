@@ -1,45 +1,65 @@
-
-name: Deploy MkDocs site to GitHub Pages
+name: Deploy Infrastructure
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
-      - 'docs/workshop/**'
-      - '.github/workflows/deploy.yml'
+      - "infra/**"
+  workflow_dispatch:
 
 permissions:
-  contents: write
-  pages: write
   id-token: write
+  contents: read
+
+env:
+  AZURE_ENV_NAME: ckmv2
+  AZURE_LOCATION: uksouth
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 jobs:
-  build-and-deploy:
+  validate:
+    name: Validate Bicep
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Install Azure CLI
+        uses: azure/login@v2
         with:
-          python-version: '3.x'
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install MkDocs and dependencies
+      - name: Validate Bicep template
         run: |
-          pip install mkdocs-material mkdocs-jupyter
+          az bicep build --file infra/main.bicep
+          echo "Bicep validation passed"
 
-      - name: Build MkDocs site
-        working-directory: docs/workshop
-        run: |
-          mkdocs build
-          touch site/.nojekyll  # Disable Jekyll processing
+  deploy:
+    name: Deploy to Azure
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Install azd
+        uses: Azure/setup-azd@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/workshop/site
-          
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure Dev Login
+        run: azd auth login --client-id ${{ secrets.AZURE_CLIENT_ID }} --federated-credential-provider github --tenant-id ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Provision and Deploy
+        run: azd up --no-prompt
+        env:
+          AZURE_ENV_NAME: ${{ env.AZURE_ENV_NAME }}
+          AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
+          AZURE_SUBSCRIPTION_ID: ${{ env.AZURE_SUBSCRIPTION_ID }}
