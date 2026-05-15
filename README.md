@@ -16,6 +16,44 @@ The full accelerator stack deployed via `azd up` with patched Bicep — RAG chat
 ![Operations Dashboard](screenshots/01-operations-dashboard.png)
 *Custom Streamlit dashboard built on top of the accelerator's data layer*
 
+## Live Voice Mode (real-time audio path)
+
+A FastAPI WebSocket service that ingests browser microphone audio in real time,
+streams it through Azure Speech Service for partial and final transcripts, and
+runs the same six-rule compliance auditor inline as the conversation unfolds.
+Live transcript and live compliance scores are pushed to the demo UI over SSE.
+
+```
+Browser mic → AudioContext (16kHz Int16 PCM) → WebSocket
+        → Azure Speech (streaming STT)
+        → Per-utterance compliance scoring (Azure OpenAI)
+        → SSE → Browser UI (live transcript + live scorecard)
+```
+
+### Run locally
+
+```bash
+python -m venv .venv-livevoice
+source .venv-livevoice/bin/activate
+pip install -r custom_extensions/live_voice/requirements.txt
+
+# .env must contain AZURE_SPEECH_KEY, AZURE_SPEECH_REGION and the existing
+# AZURE_OPENAI_* variables. AZURE_OPENAI_API_KEY is optional — the module
+# falls back to DefaultAzureCredential when it is absent.
+
+uvicorn custom_extensions.live_voice.server:app --host 0.0.0.0 --port 8090 --reload
+```
+
+Open <http://localhost:8090/> and click **Start Recording**.
+
+### What's in `custom_extensions/live_voice/`
+
+- `azure_stt.py` — async wrapper around Azure Speech `PushAudioInputStream`
+- `rules.py` — per-utterance compliance scorer (6 rules, severity-weighted)
+- `session.py` — `LiveSession` orchestrator (STT events → compliance → SSE)
+- `server.py` — FastAPI app: WebSocket audio in, SSE events out
+- `static/` — demo UI (HTML + JS + CSS)
+
 ## Architecture
 
 ```
@@ -245,6 +283,20 @@ python custom_extensions/04_compliance_check.py
 streamlit run custom_extensions/app.py
 ```
 
+### Run Live Voice Mode
+
+```bash
+# Use a dedicated venv — the Speech SDK pulls in native deps
+python -m venv .venv-livevoice
+source .venv-livevoice/bin/activate
+pip install -r custom_extensions/live_voice/requirements.txt
+
+# .env needs AZURE_SPEECH_KEY, AZURE_SPEECH_REGION plus the existing AZURE_OPENAI_* vars
+uvicorn custom_extensions.live_voice.server:app --host 0.0.0.0 --port 8090 --reload
+```
+
+Then open <http://localhost:8090/> and click **Start Recording**.
+
 ### Tear Down (stop all charges)
 
 ```bash
@@ -266,7 +318,17 @@ azd down --purge --force
 ├── custom_extensions/
 │   ├── app.py                  # Operations dashboard (6 modules)
 │   ├── 04_compliance_check.py  # Analysis + compliance pipeline
+│   ├── live_voice/             # Real-time WS/SSE voice module
+│   │   ├── azure_stt.py        # Azure Speech streaming wrapper
+│   │   ├── rules.py            # Per-utterance compliance scoring
+│   │   ├── session.py          # LiveSession orchestrator
+│   │   ├── server.py           # FastAPI WebSocket + SSE server
+│   │   ├── static/             # Browser demo UI (HTML/JS/CSS)
+│   │   └── requirements.txt
 │   └── requirements.txt
+├── scripts/
+│   ├── test_stt.py             # Smoke test for Azure Speech wrapper
+│   └── test_rules.py           # Smoke test for compliance scorer
 ├── documents/                  # Sample call transcript data
 ├── screenshots/                # Dashboard and deployment screenshots
 ├── tests/                      # Test suite

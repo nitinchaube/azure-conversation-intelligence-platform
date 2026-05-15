@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CIP Live Voice</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Conversation Intelligence &mdash; Live Voice</h1>
+      <div class="session-id">session: <span id="sid"></span></div>
+    </header>
+
+    <div class="controls">
+      <button id="startBtn">Start Recording</button>
+      <button id="stopBtn" class="stop" disabled>Stop</button>
+      <span class="status"><span id="dot" class="dot"></span><span id="statusText">idle</span></span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Live Transcript</h2>
+        <div id="transcript" class="transcript"></div>
+      </div>
+
+      <div class="card">
+        <h2>Compliance</h2>
+        <div id="scoreBanner" class="score-banner">
+          <span class="score" id="overallScore">&mdash;</span>
+          <span class="label">/ 100 weighted compliance score</span>
+        </div>
+        <div id="ruleList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/recorder.js"></script>
+</body>
+</html>
